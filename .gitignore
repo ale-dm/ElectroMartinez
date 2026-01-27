@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Dependencies
 node_modules/
 dist/
@@ -15,10 +16,28 @@ server/config/index.env
 
 # Logs
 logs/
+=======
+# Node
+node_modules/
+.env
+logs/
+uploads/
+
+# Editor
+.vscode/
+.DS_Store
+
+# Build
+build/
+dist/
+
+# Misc
+>>>>>>> ce6f577decff8f0847303ab3075975d576bd0caa
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+<<<<<<< HEAD
 pnpm-debug.log*
 lerna-debug.log*
 
@@ -56,3 +75,16 @@ coverage/
 *.backup
 *.bak
 *.old
+=======
+
+# React/Vite
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# Angular (legacy)
+frontend/.angular/
+
+# OS
+Thumbs.db
+>>>>>>> ce6f577decff8f0847303ab3075975d576bd0caa
