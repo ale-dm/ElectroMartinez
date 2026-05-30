@@ -1,6 +1,7 @@
 const express = require('express');
 const morgan = require('morgan');
 const cors = require('cors');
+const compression = require('compression');
 const bodyParser = require('body-parser');
 const helmet = require('helmet');
 const mongoSanitize = require('express-mongo-sanitize');
@@ -17,6 +18,9 @@ connectDB();
 
 // Seguridad: Headers HTTP seguros con Helmet
 app.use(helmet());
+
+// Compresión gzip/brotli para respuestas
+app.use(compression());
 
 // Middleware para parsear JSON con límite de tamaño
 app.use(bodyParser.json({ limit: '10mb' }));
@@ -49,6 +53,15 @@ const { generalLimiter, publicLimiter } = require('./middleware/security');
 // Aplicar rate limiting general
 app.use('/api/', generalLimiter);
 
+// Health check
+app.get('/', (req, res) => {
+    res.json({
+        message: 'Ecommerce MERN API',
+        version: '1.0.0',
+        status: 'running'
+    });
+});
+
 // Routes
 app.use('/api/user/', require('./routes/auth.route'));
 app.use('/api/category/', require('./routes/category.route'));
@@ -62,49 +75,32 @@ app.use('/api/notification/', require('./routes/notification.route'));
 app.use('/api/stripe/', require('./routes/stripe.route'));
 app.use('/api/returns/', require('./routes/return.route'));
 
+// 404
+app.use((req, res) => {
+    res.status(404).json({ msg: 'Page not found' });
+});
+
 // Manejo global de errores
 app.use((err, req, res, next) => {
     console.error('Error:', err);
-    
-    // Errores de validación de Mongoose
+
     if (err.name === 'ValidationError') {
         return res.status(400).json({
             error: 'Error de validación',
             details: Object.values(err.errors).map(e => e.message)
         });
     }
-    
-    // Errores de JWT
+
     if (err.name === 'JsonWebTokenError') {
-        return res.status(401).json({
-            error: 'Token inválido'
-        });
+        return res.status(401).json({ error: 'Token inválido' });
     }
-    
+
     if (err.name === 'TokenExpiredError') {
-        return res.status(401).json({
-            error: 'Token expirado'
-        });
+        return res.status(401).json({ error: 'Token expirado' });
     }
-    
-    // Error por defecto
+
     res.status(err.status || 500).json({
         error: err.message || 'Error interno del servidor'
-    });
-});
-
-app.get('/', (req, res) => {
-    res.json({ 
-        message: 'Ecommerce MERN API', 
-        version: '1.0.0',
-        status: 'running'
-    });
-});
-
-// Page Not Found
-app.use((req, res) => {
-    res.status(404).json({
-        msg: 'Page not found'
     });
 });
 

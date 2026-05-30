@@ -76,19 +76,18 @@ router.post('/register', registerLimiter, [
         // Return jsonwebtoken
         const payload = {
             user: {
-                id: user.id
+                id: user.id,
+                role: user.role
             }
         };
 
-        jwt.sign(
-            payload,
-            process.env.JWT_SECRET,
-            { expiresIn: '7d' },
-            (err, token) => {
-                if (err) throw err;
-                res.json({ token });
-            }
-        );
+        try {
+            const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
+            res.json({ token });
+        } catch (jwtErr) {
+            console.error('JWT signing error:', jwtErr.message);
+            res.status(500).send('Server error');
+        }
 
     } catch (error) {
         console.error(error.message);
@@ -114,35 +113,34 @@ router.post('/login', authLimiter, [
         // Check if user exists
         let user = await User.findOne({ email });
         if (!user) {
-            return res.status(400).json({ 
-                errors: [{ msg: 'Invalid Credentials' }] 
+            return res.status(400).json({
+                errors: [{ msg: 'Invalid Credentials' }]
             });
         }
 
         // Compare password
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            return res.status(400).json({ 
-                errors: [{ msg: 'Invalid Credentials' }] 
+            return res.status(400).json({
+                errors: [{ msg: 'Invalid Credentials' }]
             });
         }
 
         // Return jsonwebtoken
         const payload = {
             user: {
-                id: user.id
+                id: user.id,
+                role: user.role
             }
         };
 
-        jwt.sign(
-            payload,
-            process.env.JWT_SECRET,
-            { expiresIn: '7d' },
-            (err, token) => {
-                if (err) throw err;
-                res.json({ token });
-            }
-        );
+        try {
+            const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
+            res.json({ token });
+        } catch (jwtErr) {
+            console.error('JWT signing error:', jwtErr.message);
+            res.status(500).send('Server error');
+        }
 
     } catch (error) {
         console.error(error.message);
