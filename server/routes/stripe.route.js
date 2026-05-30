@@ -14,8 +14,6 @@ router.post('/create-payment-intent', auth, async (req, res) => {
             return res.status(400).json({ msg: 'Cantidad inválida' });
         }
 
-        console.log('📤 Creando PaymentIntent para:', paymentMethodType, 'Amount:', amount);
-
         // Mapeo de tipos de pago específicos
         const paymentMethodTypesMap = {
             'card': ['card'],
@@ -37,8 +35,6 @@ router.post('/create-payment-intent', auth, async (req, res) => {
                 paymentMethodType: paymentMethodType
             }
         });
-
-        console.log('✅ PaymentIntent creado:', paymentIntent.id, 'para:', paymentMethods);
 
         res.json({
             clientSecret: paymentIntent.client_secret,

@@ -67,18 +67,19 @@ router.post('/', auth, async (req, res) => {
             }
 
             if (product.quantity < item.quantity) {
-                return res.status(400).json({ 
-                    msg: `Stock insuficiente para ${product.name}. Disponible: ${product.quantity}` 
+                return res.status(400).json({
+                    msg: `Stock insuficiente para ${product.name}. Disponible: ${product.quantity}`
                 });
             }
 
-            itemsPrice += item.price * item.quantity;
+            const unitPrice = product.price;
+            itemsPrice += unitPrice * item.quantity;
 
             orderItems.push({
                 product: product._id,
                 name: product.name,
                 quantity: item.quantity,
-                price: item.price,
+                price: unitPrice,
                 image: product.images && product.images.length > 0 ? product.images[0].url : null
             });
         }

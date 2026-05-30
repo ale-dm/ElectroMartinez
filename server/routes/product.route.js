@@ -375,6 +375,126 @@ router.post('/', auth, adminAuth, upload.array('images', 5), async (req, res) =>
     }
 });
 
+// @route   GET api/product/recommendations
+// @desc    Get personalized product recommendations
+// @access  Private
+router.get('/recommendations', auth, async (req, res) => {
+    try {
+        const ViewedProduct = require('../models/ViewedProduct');
+        const Order = require('../models/Order');
+
+        // Obtener productos vistos recientemente (últimos 30 días)
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const viewedProducts = await ViewedProduct.find({
+            user: req.user.id,
+            lastViewed: { $gte: thirtyDaysAgo }
+        })
+            .populate('product', 'category')
+            .sort({ lastViewed: -1, viewCount: -1 })
+            .limit(10);
+
+        // Obtener productos de pedidos pasados
+        const orders = await Order.find({
+            user: req.user.id
+        })
+            .populate('items.product', 'category')
+            .sort({ createdAt: -1 })
+            .limit(5);
+
+        // Extraer categorías favoritas
+        const categoryMap = {};
+
+        viewedProducts.forEach(vp => {
+            if (vp.product && vp.product.category) {
+                const catId = vp.product.category.toString();
+                categoryMap[catId] = (categoryMap[catId] || 0) + vp.viewCount;
+            }
+        });
+
+        orders.forEach(order => {
+            order.items.forEach(item => {
+                if (item.product && item.product.category) {
+                    const catId = item.product.category.toString();
+                    categoryMap[catId] = (categoryMap[catId] || 0) + 3; // Mayor peso a compras
+                }
+            });
+        });
+
+        // Ordenar categorías por relevancia
+        const topCategories = Object.entries(categoryMap)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 3)
+            .map(([catId]) => catId);
+
+        // IDs de productos ya vistos/comprados (para excluir)
+        const excludeIds = [
+            ...viewedProducts.map(vp => vp.product?._id).filter(Boolean),
+            ...orders.flatMap(o => o.items.map(i => i.product?._id)).filter(Boolean)
+        ];
+
+        // Buscar productos recomendados
+        let recommendations = [];
+
+        if (topCategories.length > 0) {
+            recommendations = await Product.find({
+                category: { $in: topCategories },
+                _id: { $nin: excludeIds },
+                isActive: true,
+                quantity: { $gt: 0 }
+            })
+                .populate('category')
+                .sort({ createdAt: -1 })
+                .limit(12);
+        }
+
+        // Si no hay suficientes recomendaciones, añadir productos populares
+        if (recommendations.length < 8) {
+            const popular = await Product.find({
+                _id: { $nin: [...excludeIds, ...recommendations.map(r => r._id)] },
+                isActive: true,
+                quantity: { $gt: 0 }
+            })
+                .populate('category')
+                .sort({ createdAt: -1 })
+                .limit(12 - recommendations.length);
+
+            recommendations = [...recommendations, ...popular];
+        }
+
+        res.json(recommendations);
+    } catch (error) {
+        console.error('Error getting recommendations:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// @route   GET api/product/recently-viewed
+// @desc    Get user's recently viewed products
+// @access  Private
+router.get('/recently-viewed', auth, async (req, res) => {
+    try {
+        const ViewedProduct = require('../models/ViewedProduct');
+        const limit = parseInt(req.query.limit) || 8;
+
+        const viewed = await ViewedProduct.find({ user: req.user.id })
+            .populate({
+                path: 'product',
+                populate: { path: 'category' }
+            })
+            .sort({ lastViewed: -1 })
+            .limit(limit);
+
+        const products = viewed
+            .map(v => v.product)
+            .filter(p => p && p.isActive);
+
+        res.json(products);
+    } catch (error) {
+        console.error('Error getting recently viewed:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 // @route   GET api/product/:productId
 // @desc    Get a Product information
 // @access  Public
@@ -396,10 +516,11 @@ router.delete('/:productId', auth, adminAuth, productById, async (req, res) => {
                 await cloudinary.uploader.destroy(image.public_id);
             }
         }
-        
-        let deletedProduct = await product.remove();
+
+        const productName = product.name;
+        await product.deleteOne();
         res.json({
-            message: `${deletedProduct.name} deleted successfully`
+            message: `${productName} deleted successfully`
         });
     } catch (error) {
         console.log(error);
@@ -413,12 +534,6 @@ router.delete('/:productId', auth, adminAuth, productById, async (req, res) => {
 router.put('/:productId', auth, adminAuth, productById, upload.array('images', 5), async (req, res) => {
     try {
         let product = req.product;
-
-        // LOG para debug
-        console.log('=== PUT REQUEST DEBUG ===');
-        console.log('specifications recibidas:', req.body.specifications);
-        console.log('highlights recibidos:', req.body.highlights);
-        console.log('tags recibidos:', req.body.tags);
 
         // Parsear campos JSON
         const parseJSON = (field) => {
@@ -595,127 +710,6 @@ router.post('/:id/view', auth, async (req, res) => {
         res.json({ message: 'View tracked' });
     } catch (error) {
         console.error('Error tracking view:', error);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-// @route   GET api/product/recommendations
-// @desc    Get personalized product recommendations
-// @access  Private
-router.get('/recommendations', auth, async (req, res) => {
-    try {
-        const ViewedProduct = require('../models/ViewedProduct');
-        const Order = require('../models/Order');
-        const Category = require('../models/Category');
-
-        // Obtener productos vistos recientemente (últimos 30 días)
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-        const viewedProducts = await ViewedProduct.find({
-            user: req.user.id,
-            lastViewed: { $gte: thirtyDaysAgo }
-        })
-            .populate('product', 'category')
-            .sort({ lastViewed: -1, viewCount: -1 })
-            .limit(10);
-
-        // Obtener productos de pedidos pasados
-        const orders = await Order.find({
-            user: req.user.id
-        })
-            .populate('items.product', 'category')
-            .sort({ createdAt: -1 })
-            .limit(5);
-
-        // Extraer categorías favoritas
-        const categoryMap = {};
-        
-        viewedProducts.forEach(vp => {
-            if (vp.product && vp.product.category) {
-                const catId = vp.product.category.toString();
-                categoryMap[catId] = (categoryMap[catId] || 0) + vp.viewCount;
-            }
-        });
-
-        orders.forEach(order => {
-            order.items.forEach(item => {
-                if (item.product && item.product.category) {
-                    const catId = item.product.category.toString();
-                    categoryMap[catId] = (categoryMap[catId] || 0) + 3; // Mayor peso a compras
-                }
-            });
-        });
-
-        // Ordenar categorías por relevancia
-        const topCategories = Object.entries(categoryMap)
-            .sort(([, a], [, b]) => b - a)
-            .slice(0, 3)
-            .map(([catId]) => catId);
-
-        // IDs de productos ya vistos/comprados (para excluir)
-        const excludeIds = [
-            ...viewedProducts.map(vp => vp.product?._id).filter(Boolean),
-            ...orders.flatMap(o => o.items.map(i => i.product?._id)).filter(Boolean)
-        ];
-
-        // Buscar productos recomendados
-        let recommendations = [];
-
-        if (topCategories.length > 0) {
-            recommendations = await Product.find({
-                category: { $in: topCategories },
-                _id: { $nin: excludeIds },
-                isActive: true,
-                quantity: { $gt: 0 }
-            })
-                .populate('category')
-                .sort({ createdAt: -1 })
-                .limit(12);
-        }
-
-        // Si no hay suficientes recomendaciones, añadir productos populares
-        if (recommendations.length < 8) {
-            const popular = await Product.find({
-                _id: { $nin: [...excludeIds, ...recommendations.map(r => r._id)] },
-                isActive: true,
-                quantity: { $gt: 0 }
-            })
-                .populate('category')
-                .sort({ createdAt: -1 })
-                .limit(12 - recommendations.length);
-            
-            recommendations = [...recommendations, ...popular];
-        }
-
-        res.json(recommendations);
-    } catch (error) {
-        console.error('Error getting recommendations:', error);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-// @route   GET api/product/recently-viewed
-// @desc    Get user's recently viewed products
-// @access  Private
-router.get('/recently-viewed', auth, async (req, res) => {
-    try {
-        const ViewedProduct = require('../models/ViewedProduct');
-        const limit = parseInt(req.query.limit) || 8;
-
-        const viewed = await ViewedProduct.find({ user: req.user.id })
-            .populate({
-                path: 'product',
-                populate: { path: 'category' }
-            })
-            .sort({ lastViewed: -1 })
-            .limit(limit);
-
-        const products = viewed
-            .map(v => v.product)
-            .filter(p => p && p.isActive);
-
-        res.json(products);
-    } catch (error) {
-        console.error('Error getting recently viewed:', error);
         res.status(500).json({ error: 'Server error' });
     }
 });

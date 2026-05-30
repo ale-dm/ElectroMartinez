@@ -22,13 +22,13 @@ app.use(helmet());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
-// Logging en desarrollo
-app.use(morgan('dev'));
+// Logging
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 // CORS configurado
 app.use(cors({
-    origin: process.env.NODE_ENV === 'production' 
-        ? 'https://tu-dominio.com' // Cambiar en producción
+    origin: process.env.NODE_ENV === 'production'
+        ? process.env.CORS_ORIGIN
         : 'http://localhost:5173',
     credentials: true
 }));
