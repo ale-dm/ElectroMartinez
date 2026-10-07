@@ -1,10 +1,18 @@
 const mongoose = require('mongoose');
 
 const connectDB = async () => {
-    try {
-        // Configuración optimizada para MongoDB Atlas (Mongoose 6+)
-        const connection = await mongoose.connect(process.env.MONGO_URL);
+    let mongoUrl = process.env.MONGO_URL;
 
+    // En desarrollo sin MONGO_URL, usar base de datos en memoria
+    if (!mongoUrl && process.env.NODE_ENV !== 'production') {
+        const { MongoMemoryServer } = require('mongodb-memory-server');
+        const mongod = await MongoMemoryServer.create();
+        mongoUrl = mongod.getUri();
+        console.log('⚙️  Sin MONGO_URL — usando MongoDB en memoria (solo desarrollo)');
+    }
+
+    try {
+        const connection = await mongoose.connect(mongoUrl);
         console.log(`✅ MongoDB Connected: ${connection.connection.host}`);
         console.log(`📊 Database: ${connection.connection.name}`);
     } catch (error) {
@@ -13,7 +21,6 @@ const connectDB = async () => {
         process.exit(1);
     }
 
-    // Manejo de eventos de conexión
     mongoose.connection.on('disconnected', () => {
         console.log('⚠️  MongoDB desconectado');
     });

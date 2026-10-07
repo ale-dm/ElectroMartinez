@@ -1,7 +1,7 @@
 const { Resend } = require('resend');
 
-// Inicializar Resend con API Key
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Resend solo se inicializa si hay API key configurada
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 // Plantilla de email de bienvenida
 const welcomeEmail = (userName, userEmail) => ({
